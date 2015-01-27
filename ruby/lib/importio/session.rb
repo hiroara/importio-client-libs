@@ -287,15 +287,13 @@ class Importio
         query._on_message(data)
 
         # Clean up the query map if the query itself is finished
-        if query.finished
-          @queries.delete(request_id)
-        end
+        @queries.delete request_id if query.finished?
       rescue => exception
         puts exception.backtrace
       end
     end
 
-    def query(query, callback)
+    def query query, &block
       # This method takes an import.io Query object and issues it to the server, calling the callback
       # whenever a relevant message is received
 
@@ -303,9 +301,9 @@ class Importio
       # This allows us to track which messages correspond to which query
       query["requestId"] = SecureRandom.uuid
       # Construct a new query state tracker and store it in our map of currently running queries
-      @queries[query["requestId"]] = Query::new(callback, query)
+      @queries[query["requestId"]] = Query::new query, &block
       # Issue the query to the server
-      request("/service/query", "", { "data"=>query })
+      request "/service/query", "", "data" => query
     end
   end
 end

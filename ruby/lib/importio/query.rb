@@ -2,14 +2,14 @@ class Importio
   class Query
     # This class represents a single query to the import.io platform
 
-    def initialize(callback, query)
+    def initialize(query, &block)
       # Initialises the new query object with inputs and default state
       @query = query
       @jobs_spawned = 0
       @jobs_started = 0
       @jobs_completed = 0
       @_finished = false
-      @_callback = callback
+      @_callback = block
     end
 
     def _on_message(data)
@@ -43,9 +43,9 @@ class Importio
       @_callback.call(self, data)
     end
 
-    def finished
+    def finished?
       # Returns boolean - true if the query has been completed or terminated
-      return @_finished
+      @_finished
     end
   end
 end

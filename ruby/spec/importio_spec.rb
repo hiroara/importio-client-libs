@@ -52,7 +52,7 @@ describe Importio do
     before { client.connect }
 
     subject do
-      client.query({"input"=>{"query"=>"server"}, "connectorGuids"=>[SecureRandom.uuid]}, callback)
+      client.query({"input"=>{"query"=>"server"}, "connectorGuids"=>[SecureRandom.uuid]}, &callback)
       client.join
       client.disconnect
       @messages.find { |message| message['type'] == 'MESSAGE' }
@@ -68,7 +68,7 @@ describe Importio do
     before { client.connect }
 
     subject do
-      client.query({"input"=>{"query"=>"server"},"connectorGuids"=>["eeba9430-bdf2-46c8-9dab-e1ca3c322339"]}, callback)
+      client.query({"input"=>{"query"=>"server"},"connectorGuids"=>["eeba9430-bdf2-46c8-9dab-e1ca3c322339"]}, &callback)
       client.join
       client.disconnect
       @messages.find { |message| message['type'] == 'MESSAGE' }
@@ -84,7 +84,7 @@ describe Importio do
     before { client.connect }
 
     subject do
-      client.query({"input"=>{"query"=>"server"},"connectorGuids"=>["1ac5de1d-cf28-4e8a-b56f-3c42a24b1ef2"]}, callback )
+      client.query({"input"=>{"query"=>"server"},"connectorGuids"=>["1ac5de1d-cf28-4e8a-b56f-3c42a24b1ef2"]}, &callback )
       client.join
       client.disconnect
       @messages.select{ |message| message['type'] == 'MESSAGE' }.flat_map do |message|
@@ -104,7 +104,7 @@ describe Importio do
     let(:apikey) { nil }
 
     subject do
-      client.query({"input"=>{"query"=>"server"}, "connectorGuids"=>["1ac5de1d-cf28-4e8a-b56f-3c42a24b1ef2"]}, callback)
+      client.query({"input"=>{"query"=>"server"}, "connectorGuids"=>["1ac5de1d-cf28-4e8a-b56f-3c42a24b1ef2"]}, &callback)
       client.join
       client.disconnect
       @messages.select{ |message| message['type'] == 'MESSAGE' }.flat_map do |message|
@@ -125,13 +125,13 @@ describe Importio do
     end
 
     subject do
-      client.query({"input"=>{"query"=>"server"},"connectorGuids"=>["1ac5de1d-cf28-4e8a-b56f-3c42a24b1ef2"]}, callback )
+      client.query({"input"=>{"query"=>"server"},"connectorGuids"=>["1ac5de1d-cf28-4e8a-b56f-3c42a24b1ef2"]}, &callback )
       client.join
 
       client.session.client_id = "random"
       # This query will fail
-      client.query({"input"=>{"query"=>"server"},"connectorGuids"=>["1ac5de1d-cf28-4e8a-b56f-3c42a24b1ef2"]}, callback )
-      client.query({"input"=>{"query"=>"server"},"connectorGuids"=>["1ac5de1d-cf28-4e8a-b56f-3c42a24b1ef2"]}, callback )
+      client.query({"input"=>{"query"=>"server"},"connectorGuids"=>["1ac5de1d-cf28-4e8a-b56f-3c42a24b1ef2"]}, &callback )
+      client.query({"input"=>{"query"=>"server"},"connectorGuids"=>["1ac5de1d-cf28-4e8a-b56f-3c42a24b1ef2"]}, &callback )
       client.join
 
       client.disconnect

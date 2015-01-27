@@ -122,16 +122,16 @@ class Importio
     end
   end
 
-  def query(query, callback)
+  def query(query, &block)
     # This method takes an import.io Query object and either queues it, or issues it to the server
     # depending on whether the session is connected
 
     if @session == nil || !@session.connected?
-      @queue << {"query"=>query,"callback"=>callback}
+      @queue << { 'query' => query, 'callback' => block }
       return
     end
 
-    @session.query(query, callback)
+    @session.query query, &block
   end
 
   def connected?
