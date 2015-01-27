@@ -9,6 +9,8 @@
 # @source: https://github.com/import-io/importio-client-libs/tree/master/python
 #
 
+require 'logger'
+
 require 'importio/errors'
 require 'importio/query'
 require 'importio/session'
@@ -17,7 +19,9 @@ class Importio
   DEFAILT_HOST = 'https://query.import.io'
   # The main import.io client, used for managing the message channel and sending queries and receiving data
 
-  def initialize(user_id=nil, api_key=nil, host=DEFAILT_HOST)
+  attr_accessor :logger
+
+  def initialize(user_id=nil, api_key=nil, host=DEFAILT_HOST, options={})
     # Initialises the client library with its configuration
     @host = host
     @proxy_host = nil
@@ -29,6 +33,8 @@ class Importio
     @login_host = nil
     @session = nil
     @queue = Queue.new
+
+    @logger = options.key?(:logger) ? options[:logger] : Logger.new(STDOUT)
   end
 
   # We use this only for a specific test case

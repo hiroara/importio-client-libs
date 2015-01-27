@@ -12,6 +12,9 @@ class Importio
   class Session
     # Session manager, used for managing the message channel, sending queries and receiving data
 
+    extend Forwardable
+    def_delegators :@io, :logger
+
     def initialize(io, host=DEFAILT_HOST, user_id=nil, api_key=nil, proxy_host=nil, proxy_port=nil)
       # Initialises the client library with its configuration
       @io = io
@@ -103,7 +106,7 @@ class Importio
       unless response.code == '200'
         error_message = "Unable to connect to import.io for url #{url}"
         error = Importio::Errors::RequestFailed.new error_message, response.code
-        ignore_failure ?  STDERR.puts(error.message) : raise(error)
+        ignore_failure ? self.logger.error(error.message) : raise(error)
       end
 
       response.body = JSON.parse(response.body)
@@ -116,10 +119,10 @@ class Importio
           next if @disconnecting || !@connected || @connecting
           # If we get a 402 unknown client we need to reconnect
           if msg["error"] == "402::Unknown client"
-            STDERR.puts "402 received, reconnecting"
+            self.logger.error "402 received, reconnecting"
             @io.reconnect()
           else
-            ignore_failure ? STDERR.puts(error_message) : raise(Importio::Errors::RequestFailed, error_message)
+            ignore_failure ? self.logger.error(error_message) : raise(Importio::Errors::RequestFailed, error_message)
           end
         end
 
@@ -230,8 +233,7 @@ class Importio
 
       # If we don't recognise the client ID, then do not process the message
       if query == nil
-        puts "No open query #{query}:"
-        puts JSON.pretty_generate(data)
+        self.logger.warn "No open query #{query}: #{JSON.pretty_generate(data)}"
         return
       end
 
