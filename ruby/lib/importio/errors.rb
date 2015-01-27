@@ -1,3 +1,5 @@
-module Importio::Errors; end
+class Importio
+  module Errors; end
+end
 
 require 'importio/errors/request_failed'
