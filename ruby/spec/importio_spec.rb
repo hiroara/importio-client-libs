@@ -1,6 +1,8 @@
 require 'spec_helper'
 
 describe Importio do
+  after { client.disconnect if client.connected? }
+
   let(:client) { Importio::new userguid, apikey, "https://query.#{host}" }
   let(:host) { 'import.io' }
   let(:apikey) { ENV['APIKEY'] }

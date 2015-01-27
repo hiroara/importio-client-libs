@@ -14,9 +14,10 @@ require 'importio/query'
 require 'importio/session'
 
 class Importio
+  DEFAILT_HOST = 'https://query.import.io'
   # The main import.io client, used for managing the message channel and sending queries and receiving data
 
-  def initialize(user_id=nil, api_key=nil, host="https://query.import.io")
+  def initialize(user_id=nil, api_key=nil, host=DEFAILT_HOST)
     # Initialises the client library with its configuration
     @host = host
     @proxy_host = nil
@@ -125,11 +126,15 @@ class Importio
     # This method takes an import.io Query object and either queues it, or issues it to the server
     # depending on whether the session is connected
 
-    if @session == nil || !@session.connected
+    if @session == nil || !@session.connected?
       @queue << {"query"=>query,"callback"=>callback}
       return
     end
 
     @session.query(query, callback)
+  end
+
+  def connected?
+    @session != nil && @session.connected?
   end
 end

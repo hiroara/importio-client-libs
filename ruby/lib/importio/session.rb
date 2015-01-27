@@ -6,11 +6,13 @@ require 'cgi'
 require 'http-cookie'
 require 'securerandom'
 
+require 'importio/session/request'
+
 class Importio
   class Session
     # Session manager, used for managing the message channel, sending queries and receiving data
 
-    def initialize(io, host='https://query.import.io', user_id=nil, api_key=nil, proxy_host=nil, proxy_port=nil)
+    def initialize(io, host=DEFAILT_HOST, user_id=nil, api_key=nil, proxy_host=nil, proxy_port=nil)
       # Initialises the client library with its configuration
       @io = io
       @msg_id = 1
@@ -20,44 +22,31 @@ class Importio
       @queries = Hash.new
       @user_id = user_id
       @api_key = api_key
-      @queue = Queue.new
+      @data_queue = Queue.new
       @connected = false
       @connecting = false
       @disconnecting = false
       @polling = false
-      # These variables serve to identify this client and its version to the server
-      @clientName = 'import.io Ruby client'
-      @clientVersion = '2.0.0'
-      @cj = HTTP::CookieJar.new
+
+      @cookie_jar = HTTP::CookieJar.new
+
       @proxy_host = proxy_host
       @proxy_port = proxy_port
     end
 
     # We use this only for a specific test case
-    attr_reader :client_id
-    attr_writer :client_id
-    attr_reader :connected
+    attr_accessor :client_id
 
-    def make_request(url, data)
-      # Helper method that generates a request object
-      uri = URI(url)
-      request = Net::HTTP::Post.new(uri.request_uri)
-      request.body = data
-      http = Net::HTTP.new(uri.host, uri.port, @proxy_host, @proxy_port)
-      http.use_ssl = uri.scheme == 'https'
-      return uri, http, request
+    def connected?
+      @connected
     end
 
-    def open(uri, http, request)
-      # Makes a network request
-      response = http.request(request)
-      cookies = response.get_fields("set-cookie")
-      if cookies != nil
-        cookies.each { |value|
-          @cj.parse(value, uri)
-        }
-      end
-      return response
+    def make_request(url, data, options={})
+      Request.new self, url, data, options
+    end
+
+    def set_cookies_for uri, cookies
+      cookies.each { |value| @cookie_jar.parse value, uri }
     end
 
     def encode(dict)
@@ -68,11 +57,9 @@ class Importio
     def login(username, password, host="https://api.import.io")
       # If you want to use cookie-based authentication, this method will log you in with a username and password to get a session
       data = encode({'username' => username, 'password'=> password})
-      uri, http, req = make_request("#{host}/auth/login", data )
-      r = open(uri, http, req)
-
-      if r.code != "200"
-        raise Importio::Errors::RequestFailed.new('Could not log in', r.code)
+      request = make_request("#{host}/auth/login", data )
+      request.send_request.tap do |response|
+        raise Importio::Errors::RequestFailed.new('Could not log in', response.code) unless response.code == '200'
       end
     end
 
@@ -88,9 +75,7 @@ class Importio
       @msg_id += 1
 
       # If we have a client ID, then we need to send that (will be provided on handshake)
-      if @client_id != nil
-        data["clientId"] = @client_id
-      end
+      data["clientId"] = @client_id unless @client_id == nil
 
       # Build the URL that we are going to request
       url = "#{@url}#{path}"
@@ -103,14 +88,11 @@ class Importio
 
       # Build the request object we are going to use to initialise the request
       body = JSON.dump([data])
-      uri, http, request = make_request(url, body)
-      request.content_type = "application/json;charset=UTF-8"
-      request["Cookie"] = HTTP::Cookie.cookie_value(@cj.cookies(uri))
-      request["import-io-client"] = @clientName
-      request["import-io-client-version"] = @clientVersion
+      request = make_request url, body, content_type: 'application/json;charset=UTF-8'
+      request.cookie = HTTP::Cookie.cookie_value @cookie_jar.cookies(@uri)
 
       # Send the request itself
-      response = open(uri, http, request)
+      response = request.send_request
 
       # Don't process the response if we've disconnected in the meantime
       if !@connected and !@connecting
@@ -131,7 +113,7 @@ class Importio
       response.body = JSON.parse(response.body)
 
       # Iterate through each of the messages in the response content
-      for msg in response.body do
+      response.body.each do |msg|
         # If the message is not successful, i.e. an import.io server error has occurred, decide what action to take
         if msg.has_key?("successful") and msg["successful"] != true
           error_message = "Unsuccessful request: #{msg}"
@@ -140,7 +122,7 @@ class Importio
             if msg["error"] == "402::Unknown client"
               puts "402 received, reconnecting"
               @io.reconnect()
-            elsif throw
+            elsif !ignore_failure
               raise error_message
             else
               puts error_message
@@ -156,7 +138,7 @@ class Importio
         end
 
         # Now we have a valid message on the right channel, queue it up to be processed
-        @queue.push(msg["data"])
+        @data_queue.push(msg["data"])
       end
 
       return response
@@ -176,7 +158,7 @@ class Importio
 
     def subscribe(channel)
       # This method uses the request helper to issue a CometD subscription request for this client on the server
-      return request("/meta/subscribe", "", {"subscription"=>channel})
+      request("/meta/subscribe", "", {"subscription"=>channel})
     end
 
     def connect
@@ -211,6 +193,9 @@ class Importio
       }
 
       @connecting = false
+
+      return unless block_given?
+      yield.tap { self.disconnect }
     end
 
     def disconnect
@@ -243,13 +228,6 @@ class Importio
       }
     end
 
-    def stop
-      # This method stops all of the threads that are currently running
-      @threads.each { |thread|
-        thread.terminate
-      }
-    end
-
     def join
       # This method joins the threads that are running together, so we can wait for them to be finished
       while @connected
@@ -266,7 +244,7 @@ class Importio
       while @connected
         begin
           # Attempt to process the last message on the queue
-          process_message @queue.pop
+          process_message @data_queue.pop
         rescue => exception
           puts exception.backtrace
         end
@@ -277,9 +255,7 @@ class Importio
       # This method is called in a new thread to open long-polling HTTP connections to the import.io
       # CometD server so that we can wait for any messages that the server needs to send to us
 
-      if @polling
-        return
-      end
+      return if @polling
 
       @polling = true
 
@@ -331,6 +307,5 @@ class Importio
       # Issue the query to the server
       request("/service/query", "", { "data"=>query })
     end
-
   end
 end
