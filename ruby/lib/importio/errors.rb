@@ -3,3 +3,4 @@ class Importio
 end
 
 require 'importio/errors/request_failed'
+require 'importio/errors/already_connected'

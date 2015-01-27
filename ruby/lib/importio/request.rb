@@ -1,4 +1,4 @@
-class Importio::Session
+class Importio
   class Request
 
     # These variables serve to identify this client and its version to the server

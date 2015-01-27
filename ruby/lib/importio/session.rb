@@ -6,7 +6,7 @@ require 'cgi'
 require 'http-cookie'
 require 'securerandom'
 
-require 'importio/session/request'
+require 'importio/request'
 
 class Importio
   class Session
@@ -118,8 +118,8 @@ class Importio
           error_message = "Unsuccessful request: #{msg}"
           next if @disconnecting || !@connected || @connecting
           # If we get a 402 unknown client we need to reconnect
-          if msg["error"] == "402::Unknown client"
-            self.logger.error "402 received, reconnecting"
+          if msg['error'] == '402::Unknown client'
+            self.logger.error '402 received, reconnecting'
             @io.reconnect()
           else
             ignore_failure ? self.logger.error(error_message) : raise(Importio::Errors::RequestFailed, error_message)
@@ -127,10 +127,10 @@ class Importio
         end
 
         # Ignore messages that come back on a CometD channel that we have not subscribed to
-        next if msg["channel"] != @messaging_channel
+        next if msg['channel'] != @messaging_channel
 
         # Now we have a valid message on the right channel, queue it up to be processed
-        @data_queue.push(msg["data"])
+        @data_queue.push msg['data']
       end
 
       response
@@ -178,7 +178,7 @@ class Importio
       @connecting = false
 
       return unless block_given?
-      yield.tap { self.disconnect }
+      yield.tap { self.join; self.disconnect }
     end
 
     def disconnect
@@ -206,7 +206,7 @@ class Importio
       @disconnecting = false
 
       # Send a "disconnected" message to all of the current queries, and then remove them
-      q.each { |key, query| query._on_message 'type' => 'DISCONNECT', 'requestId' => key }
+      q.each { |key, query| query.notify type: 'DISCONNECT', requestId: key }
     end
 
     def join
@@ -238,7 +238,7 @@ class Importio
       end
 
       # Call the message callback on the query object with the data
-      query._on_message(data)
+      query.notify data
 
       # Clean up the query map if the query itself is finished
       @queries.delete request_id if query.finished?

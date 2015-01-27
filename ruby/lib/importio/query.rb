@@ -1,3 +1,5 @@
+require 'importio/response'
+
 class Importio
   class Query
     # This class represents a single query to the import.io platform
@@ -12,18 +14,28 @@ class Importio
       @_callback = block
     end
 
-    def _on_message(data)
+    def notify data
+      callback Response.new(data)
+    end
+
+    def finished?
+      # Returns boolean - true if the query has been completed or terminated
+      @_finished
+    end
+
+    private
+    def callback response
       # Method that is called when a new message is received
       #
       # Check the type of the message to see what we are working with
-      msg_type = data["type"]
-      if msg_type == "SPAWN"
+      case msg_type = response.type
+      when 'SPAWN'
         # A spawn message means that a new job is being initialised on the server
         @jobs_spawned+=1
-      elsif msg_type == "INIT" or msg_type == "START"
+      when 'INIT', 'START'
         # Init and start indicate that a page of work has been started on the server
         @jobs_started+=1
-      elsif msg_type == "STOP"
+      when 'STOP'
         # Stop indicates that a job has finished on the server
         @jobs_completed+=1
       end
@@ -35,17 +47,10 @@ class Importio
 
       # These error conditions mean the query has been terminated on the server
       # It either errored on the import.io end, the user was not logged in, or the query was cancelled on the server
-      if msg_type == "ERROR" or msg_type == "UNAUTH" or msg_type == "CANCEL"
-        @_finished = true
-      end
+      @_finished = true if %w[ ERROR UNAUTH CANCEL ].include? msg_type
 
       # Now we have processed the query state, we can return the data from the message back to listeners
-      @_callback.call(self, data)
-    end
-
-    def finished?
-      # Returns boolean - true if the query has been completed or terminated
-      @_finished
+      @_callback.call self, response
     end
   end
 end

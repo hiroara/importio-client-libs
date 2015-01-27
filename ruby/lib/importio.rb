@@ -80,25 +80,30 @@ class Importio
     # Connect this client to the import.io server if not already connected
 
     # Check if there is a session already first
-    if @session != nil
-      return
-    end
+    raise Importio::Errors::AlreadyConnected if @session
 
-    @session = Session::new(self, @host, @user_id, @api_key, @proxy_host, @proxy_port)
-    @session.connect()
+    @session = Session::new self, @host, @user_id, @api_key, @proxy_host, @proxy_port
 
-    # This should be a @queue.clone, but this errors in 2.1 branch of Ruby: #9718
-    # q = @queue.clone
-    q = Queue.new
-    until @queue.empty?
-      q.push(@queue.pop(true))
-    end
-    @queue = Queue.new
+    if block_given?
+      [].tap do |results|
+        @session.connect
+        yield results
+        self.join
+        self.disconnect
+      end
+    else
+      @session.connect
 
-    until q.empty?
-      query_data = q.pop(true) rescue nil
-      if query_data
-        query(query_data.query, query_data.callback)
+      # This should be a @queue.clone, but this errors in 2.1 branch of Ruby: #9718
+      # q = @queue.clone
+      q = Queue.new
+      q.push @queue.pop(true) until @queue.empty?
+
+      @queue = Queue.new
+
+      until q.empty?
+        query_data = q.pop true rescue nil
+        query query_data.query, query_data.callback if query_data
       end
     end
   end
@@ -108,24 +113,19 @@ class Importio
     # It is best practice to disconnect when you are finished with querying, so as to clean
     # up resources on both the client and server
 
-    if @session != nil
-      @session.disconnect()
-      @session = nil
-    end
+    return unless @session
+    @session.disconnect()
+    @session = nil
   end
 
   def stop
     # This method stops all of the threads that are currently running in the session
-    if @session != nil
-      return @session.stop()
-    end
+    @session.stop() if @session
   end
 
   def join
     # This method joins the threads that are running together in the session, so we can wait for them to be finished
-    if @session != nil
-      return @session.join()
-    end
+    @session.join() if @session
   end
 
   def query(query, &block)
@@ -142,5 +142,19 @@ class Importio
 
   def connected?
     @session != nil && @session.connected?
+  end
+
+  def call_api url, connector_guids
+    self.connect do |results|
+      self.query api_params(url, connector_guids) do |query, response|
+        raise Importio::Errors::RequestFailed, "Query request failed: #{query}" if response.error?
+        results << response if response.message?
+      end
+    end
+  end
+
+  private
+  def api_params url, connector_guids
+    { 'input' => { 'webpage/url' => url }, 'connectorGuids' => connector_guids }
   end
 end

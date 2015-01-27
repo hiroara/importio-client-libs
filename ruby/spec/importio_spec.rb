@@ -96,10 +96,7 @@ describe Importio do
   end
 
   describe 'querying a working source with username and password' do
-    before do
-      client.login(username, password, "https://api.#{host}")
-      client.connect
-    end
+    before { client.login username, password, "https://api.#{host}" }
     let(:userguid) { nil }
     let(:apikey) { nil }
 
@@ -144,6 +141,18 @@ describe Importio do
     it do
       subject.each_slice(expected_data.length) do |names|
         expect(names).to match expected_data
+      end
+    end
+  end
+
+  describe '#call_api' do
+    subject do
+      client.call_api 'http://example.com/rss', ["1ac5de1d-cf28-4e8a-b56f-3c42a24b1ef2"] * 2
+    end
+    it do
+      expect(subject.length).to eq 2
+      subject.each do |resp|
+        expect(resp.results.map { |result| result['name'] }).to match expected_data
       end
     end
   end
