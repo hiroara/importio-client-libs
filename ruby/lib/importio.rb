@@ -1,13 +1,13 @@
 #
 # import.io client library - client classes
-# 
+#
 # This file contains the main classes required to connect to and query import.io APIs
 #
 # Dependencies: Ruby 1.9, http-cookie
 #
 # @author: dev@import.io
 # @source: https://github.com/import-io/importio-client-libs/tree/master/python
-# 
+#
 
 require "net/http"
 require "uri"
@@ -19,7 +19,7 @@ require "securerandom"
 
 class Query
   # This class represents a single query to the import.io platform
-  
+
   def initialize(callback, query)
     # Initialises the new query object with inputs and default state
     @query = query
@@ -29,10 +29,10 @@ class Query
     @_finished = false
     @_callback = callback
   end
-  
+
   def _on_message(data)
     # Method that is called when a new message is received
-    # 
+    #
     # Check the type of the message to see what we are working with
     msg_type = data["type"]
     if msg_type == "SPAWN"
@@ -45,26 +45,26 @@ class Query
       # Stop indicates that a job has finished on the server
       @jobs_completed+=1
     end
-      
+
     # Update the finished state
     # The query is finished if we have started some jobs, we have finished as many as we started, and we have started as many as we have spawned
     # There is a +1 on jobs_spawned because there is an initial spawn to cover initialising all of the jobs for the query
     @_finished = (@jobs_started == @jobs_completed and @jobs_spawned + 1 == @jobs_started and @jobs_started > 0)
-    
+
     # These error conditions mean the query has been terminated on the server
     # It either errored on the import.io end, the user was not logged in, or the query was cancelled on the server
     if msg_type == "ERROR" or msg_type == "UNAUTH" or msg_type == "CANCEL"
       @_finished = true
     end
-    
+
     # Now we have processed the query state, we can return the data from the message back to listeners
     @_callback.call(self, data)
   end
-    
+
   def finished
     # Returns boolean - true if the query has been completed or terminated
     return @_finished
-  end 
+  end
 end
 
 class Importio
@@ -92,7 +92,7 @@ class Importio
     @proxy_host = host
     @proxy_port = port
   end
-  
+
   def login(username, password, host="https://api.import.io")
     # If you want to use cookie-based authentication, this method will log you in with a username and password to get a session
     @username = username
@@ -110,7 +110,7 @@ class Importio
 
   def reconnect
     # Reconnects the client to the platform by establishing a new session
-    
+
     # Disconnect an old session, if there is one
     if @session != nil
       disconnect()
@@ -167,7 +167,7 @@ class Importio
       return @session.stop()
     end
   end
-  
+
   def join
     # This method joins the threads that are running together in the session, so we can wait for them to be finished
     if @session != nil
@@ -178,7 +178,7 @@ class Importio
   def query(query, callback)
     # This method takes an import.io Query object and either queues it, or issues it to the server
     # depending on whether the session is connected
-    
+
     if @session == nil || !@session.connected
       @queue << {"query"=>query,"callback"=>callback}
       return
@@ -229,7 +229,7 @@ class Session
     http.use_ssl = uri.scheme == "https"
     return uri, http, request
   end
-  
+
   def open(uri, http, request)
     # Makes a network request
     response = http.request(request)
@@ -241,12 +241,12 @@ class Session
     end
     return response
   end
-  
+
   def encode(dict)
     # Encodes a dictionary to x-www-form format
     dict.map{|k,v| "#{CGI.escape(k)}=#{CGI.escape(v)}"}.join("&")
   end
-  
+
   def login(username, password, host="https://api.import.io")
     # If you want to use cookie-based authentication, this method will log you in with a username and password to get a session
     data = encode({'username' => username, 'password'=> password})
@@ -254,11 +254,11 @@ class Session
     r = open(uri, http, req)
 
     if r.code != "200"
-      raise "Could not log in, code #{r.code}"
+      raise Importio::Errors::RequestFailed.new('Could not log in', r.code)
     end
   end
-  
-  def request(channel, path="", data={}, throw=true)
+
+  def request(channel, path="", data={}, ignore_failure=false)
     # Helper method that makes a generic request on the messaging channel
 
     # These are CometD configuration values that are common to all requests we need to send
@@ -268,21 +268,21 @@ class Session
     # We need to increment the message ID with each request that we send
     data["id"] = @msg_id
     @msg_id += 1
-    
+
     # If we have a client ID, then we need to send that (will be provided on handshake)
     if @client_id != nil
       data["clientId"] = @client_id
     end
-      
+
     # Build the URL that we are going to request
     url = "#{@url}#{path}"
-    
+
     # If the user has chosen API key authentication, we need to send the API key with each request
     if @api_key != nil
       q = encode({ "_user" => @user_id, "_apikey" => @api_key })
       url = "#{url}?#{q}"
     end
-    
+
     # Build the request object we are going to use to initialise the request
     body = JSON.dump([data])
     uri, http, request = make_request(url, body)
@@ -290,7 +290,7 @@ class Session
     request["Cookie"] = HTTP::Cookie.cookie_value(@cj.cookies(uri))
     request["import-io-client"] = @clientName
     request["import-io-client-version"] = @clientVersion
-    
+
     # Send the request itself
     response = open(uri, http, request)
 
@@ -301,20 +301,21 @@ class Session
 
     # If the server responds non-200 we have a serious issue (configuration wrong or server down)
     if response.code != "200"
-      error_message = "Unable to connect to import.io, status #{response.code} for url #{url}"
-      if throw
-        raise error_message
+      error_message = "Unable to connect to import.io for url #{url}"
+      error = Importio::Errors::RequestFailed.new(error_message, response.code)
+      if ignore_failure
+        STDERR.puts error.message
       else
-        puts error_message
+        raise error
       end
     end
-    
+
     response.body = JSON.parse(response.body)
 
     # Iterate through each of the messages in the response content
     for msg in response.body do
       # If the message is not successful, i.e. an import.io server error has occurred, decide what action to take
-      if msg.has_key?("successful") and msg["successful"] != true 
+      if msg.has_key?("successful") and msg["successful"] != true
         error_message = "Unsuccessful request: #{msg}"
         if !@disconnecting and @connected and !@connecting
           # If we get a 402 unknown client we need to reconnect
@@ -330,7 +331,7 @@ class Session
           next
         end
       end
-      
+
       # Ignore messages that come back on a CometD channel that we have not subscribed to
       if msg["channel"] != @messaging_channel
         next
@@ -339,14 +340,14 @@ class Session
       # Now we have a valid message on the right channel, queue it up to be processed
       @queue.push(msg["data"])
     end
-    
+
     return response
   end
-  
+
   def handshake
     # This method uses the request helper to make a CometD handshake request to register the client on the server
     handshake = request("/meta/handshake", path="handshake", data={"version"=>"1.0","minimumVersion"=>"0.9","supportedConnectionTypes"=>["long-polling"],"advice"=>{"timeout"=>60000,"interval"=>0}})
-    
+
     if handshake == nil
       return
     end
@@ -354,7 +355,7 @@ class Session
     # Set the Client ID from the handshake's response
     @client_id = handshake.body[0]["clientId"]
   end
-  
+
   def subscribe(channel)
     # This method uses the request helper to issue a CometD subscription request for this client on the server
     return request("/meta/subscribe", "", {"subscription"=>channel})
@@ -371,7 +372,7 @@ class Session
 
     # Do the hanshake request to register the client on the server
     handshake
-    
+
     # Register this client with a subscription to our chosen message channel
     subscribe(@messaging_channel)
 
@@ -426,19 +427,15 @@ class Session
 
   def stop
     # This method stops all of the threads that are currently running
-    @threads.each { |thread| 
+    @threads.each { |thread|
       thread.terminate
     }
   end
-  
+
   def join
     # This method joins the threads that are running together, so we can wait for them to be finished
     while @connected
-      if @queries.length == 0
-        # When there are no more queries, stop all the threads
-        stop()
-        return
-      end
+      return if @queries.length == 0
       sleep 1
     end
   end
@@ -461,7 +458,7 @@ class Session
   def poll
     # This method is called in a new thread to open long-polling HTTP connections to the import.io
     # CometD server so that we can wait for any messages that the server needs to send to us
-    
+
     if @polling
       return
     end
@@ -476,7 +473,7 @@ class Session
 
     @polling = false
   end
-    
+
   def process_message(data)
     # This method is called by the queue poller to handle messages that are received from the import.io
     # CometD server
@@ -484,14 +481,14 @@ class Session
       # First we need to look up which query object the message corresponds to, based on its request ID
       request_id = data["requestId"]
       query = @queries[request_id]
-      
+
       # If we don't recognise the client ID, then do not process the message
-      if query == nil 
+      if query == nil
         puts "No open query #{query}:"
         puts JSON.pretty_generate(data)
         return
       end
-      
+
       # Call the message callback on the query object with the data
       query._on_message(data)
 
@@ -503,11 +500,11 @@ class Session
       puts exception.backtrace
     end
   end
-    
+
   def query(query, callback)
     # This method takes an import.io Query object and issues it to the server, calling the callback
     # whenever a relevant message is received
-    
+
     # Set the request ID to a random GUID
     # This allows us to track which messages correspond to which query
     query["requestId"] = SecureRandom.uuid
@@ -518,3 +515,5 @@ class Session
   end
 
 end
+
+require 'importio/errors'

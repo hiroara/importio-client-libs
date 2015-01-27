@@ -6,5 +6,6 @@
 surefire-reports
 maven-status
 ruby/*.gem
+ruby/Gemfile.lock
 python/dist
 python/build

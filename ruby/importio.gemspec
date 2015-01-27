@@ -9,4 +9,7 @@ Gem::Specification.new do |s|
   s.files       = ["lib/importio.rb"]
   s.homepage    = "https://import.io/data/integrate/#ruby"
   s.add_runtime_dependency 'http-cookie', '~> 1.0'
+  s.add_development_dependency 'rspec', '~> 3.1'
+  s.add_development_dependency 'pry'
+  s.add_development_dependency 'pry-byebug'
 end
