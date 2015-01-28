@@ -5,6 +5,7 @@ require 'json'
 require 'cgi'
 require 'http-cookie'
 require 'securerandom'
+require 'forwardable'
 
 require 'importio/request'
 

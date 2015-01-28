@@ -9,9 +9,10 @@
 # @source: https://github.com/import-io/importio-client-libs/tree/master/python
 # 
 
-require "./lib/importio.rb"
-#require "importio"
-require "json" 
+$: << "#{File.dirname(__FILE__)}/lib"
+require "rubygems"
+require "importio"
+require "json"
 
 # You have two choices for authenticating with the Ruby client: you can use your API key
 # or your username and password. Username and password is quicker to get started with, but
@@ -20,7 +21,7 @@ require "json"
 # http://import.io/data/account
 
 # To use an API key for authentication, use the following code:
-client = Importio::new("YOUR_USER_GUID", "YOUR_API_KEY")
+client = Importio::new(ENV['GUID'], ENV['APIKEY'])
 # If you wish, you may configure HTTP proxies that ruby can use to connect
 # to import.io. If you need to do this, uncomment the following line and fill in the
 # correct details to specify an HTTP proxy:
@@ -44,25 +45,25 @@ data_rows = []
 # In order to receive the data from the queries we issue, we need to define a callback method
 # This method will receive each message that comes back from the queries, and we can take that
 # data and store it for use in our app
-callback = lambda do |query, message|
+callback = proc do |query, message|
   # Disconnect messages happen if we disconnect the client library while a query is in progress
-  if message["type"] == "DISCONNECT"
+  if message.type == "DISCONNECT"
     puts "The query was cancelled as the client was disconnected"
   end
-  if message["type"] == "MESSAGE"
-    if message["data"].key?("errorType")
+  if message.message?
+    if message.data.key?("errorType")
       # In this case, we received a message, but it was an error from the external service
       puts "Got an error!"
-      puts JSON.pretty_generate(message["data"])
+      puts JSON.pretty_generate(message.data)
   	else
       # We got a message and it was not an error, so we can process the data
       puts "Got data!"
-      puts JSON.pretty_generate(message["data"])
+      puts JSON.pretty_generate(message.data)
       # Save the data we got in our dataRows variable for later
-      data_rows << message["data"]["results"]
+      data_rows << message.results
     end
   end
-  if query.finished
+  if query.finished?
     puts "Query finished"
   end
 end
@@ -70,9 +71,9 @@ end
 # Issue three queries to the same data source with different inputs
 # You can modify the inputs and connectorGuids so as to query your own sources
 # To find out more, visit the integrate page at http://import.io/data/integrate/#ruby
-client.query({"input"=>{"query"=>"server"},"connectorGuids"=>["39df3fe4-c716-478b-9b80-bdbee43bfbde"]}, callback)
-client.query({"input"=>{"query"=>"ubuntu"},"connectorGuids"=>["39df3fe4-c716-478b-9b80-bdbee43bfbde"]}, callback)
-client.query({"input"=>{"query"=>"clocks"},"connectorGuids"=>["39df3fe4-c716-478b-9b80-bdbee43bfbde"]}, callback)
+client.query("input"=>{"query"=>"server"},"connectorGuids"=>["39df3fe4-c716-478b-9b80-bdbee43bfbde"], &callback)
+client.query("input"=>{"query"=>"ubuntu"},"connectorGuids"=>["39df3fe4-c716-478b-9b80-bdbee43bfbde"], &callback)
+client.query("input"=>{"query"=>"clocks"},"connectorGuids"=>["39df3fe4-c716-478b-9b80-bdbee43bfbde"], &callback)
 
 puts "Queries dispatched, now waiting for results"
 
