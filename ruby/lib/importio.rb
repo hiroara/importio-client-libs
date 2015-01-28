@@ -86,10 +86,13 @@ class Importio
 
     if block_given?
       [].tap do |results|
-        @session.connect
-        yield results
-        self.join
-        self.disconnect
+        begin
+          @session.connect
+          yield results
+          self.join
+        ensure
+          self.disconnect
+        end
       end
     else
       @session.connect
@@ -147,7 +150,7 @@ class Importio
   def call_api url, connector_guids
     self.connect do |results|
       self.query api_params(url, connector_guids) do |query, response|
-        raise Importio::Errors::RequestFailed, "Query request failed: #{query}" if response.error?
+        raise Importio::Errors::QueryFailed.new('Error response received', query, response) if response.error?
         results << response if response.message?
       end
     end
