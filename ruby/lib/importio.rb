@@ -16,12 +16,12 @@ require 'importio/query'
 require 'importio/session'
 
 class Importio
-  DEFAILT_HOST = 'https://query.import.io'
+  DEFAULT_HOST = 'https://query.import.io'
   # The main import.io client, used for managing the message channel and sending queries and receiving data
 
   attr_accessor :logger
 
-  def initialize(user_id=nil, api_key=nil, host=DEFAILT_HOST, options={})
+  def initialize(user_id=nil, api_key=nil, host=DEFAULT_HOST, options={})
     # Initialises the client library with its configuration
     @host = host
     @proxy_host = nil

@@ -16,7 +16,7 @@ class Importio
     extend Forwardable
     def_delegators :@io, :logger
 
-    def initialize(io, host=DEFAILT_HOST, user_id=nil, api_key=nil, proxy_host=nil, proxy_port=nil)
+    def initialize(io, host=DEFAULT_HOST, user_id=nil, api_key=nil, proxy_host=nil, proxy_port=nil)
       # Initialises the client library with its configuration
       @io = io
       @msg_id = 1
